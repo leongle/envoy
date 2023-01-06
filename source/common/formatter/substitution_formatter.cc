@@ -904,6 +904,15 @@ const StreamInfoFormatter::FieldExtractorLookupTbl& StreamInfoFormatter::getKnow
                                     return result;
                                   });
                             }}},
+                          {"DOWNSTREAM_HANDSHAKE_DURATION",
+                           {CommandSyntaxChecker::COMMAND_ONLY,
+                            [](const std::string&, const absl::optional<size_t>&) {
+                              return std::make_unique<StreamInfoDurationFieldExtractor>(
+                                  [](const StreamInfo::StreamInfo& stream_info) {
+                                    StreamInfo::TimingUtility timing(stream_info);
+                                    return timing.downstreamHandshakeComplete();
+                                  });
+                            }}},
                           {"BYTES_RECEIVED",
                            {CommandSyntaxChecker::COMMAND_ONLY,
                             [](const std::string&, const absl::optional<size_t>&) {
@@ -1502,6 +1511,23 @@ const StreamInfoFormatter::FieldExtractorLookupTbl& StreamInfoFormatter::getKnow
                                           stream_info.downstreamAddressProvider().ja3Hash());
                                     }
                                     return result;
+                                  });
+                            }}},
+                          {"STREAM_ID",
+                           {CommandSyntaxChecker::COMMAND_ONLY,
+                            [](const std::string&, const absl::optional<size_t>&) {
+                              return std::make_unique<StreamInfoStringFieldExtractor>(
+                                  [](const StreamInfo::StreamInfo& stream_info)
+                                      -> absl::optional<std::string> {
+                                    auto provider = stream_info.getStreamIdProvider();
+                                    if (!provider.has_value()) {
+                                      return {};
+                                    }
+                                    auto id = provider->toStringView();
+                                    if (!id.has_value()) {
+                                      return {};
+                                    }
+                                    return absl::make_optional<std::string>(id.value());
                                   });
                             }}}});
 }

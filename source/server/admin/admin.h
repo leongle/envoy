@@ -71,8 +71,7 @@ public:
   AdminImpl(const std::string& profile_path, Server::Instance& server,
             bool ignore_global_conn_limit);
 
-  Http::Code runCallback(absl::string_view path_and_query,
-                         Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
+  Http::Code runCallback(Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
                          AdminStream& admin_stream);
   const Network::Socket& socket() override { return *socket_; }
   Network::Socket& mutableSocket() { return *socket_; }
@@ -99,7 +98,8 @@ public:
   uint32_t concurrency() const override { return server_.options().concurrency(); }
 
   // Network::FilterChainManager
-  const Network::FilterChain* findFilterChain(const Network::ConnectionSocket&) const override {
+  const Network::FilterChain* findFilterChain(const Network::ConnectionSocket&,
+                                              const StreamInfo::StreamInfo&) const override {
     return admin_filter_chain_.get();
   }
 
@@ -112,7 +112,7 @@ public:
                                     Network::UdpReadFilterCallbacks&) override {}
 
   // Http::FilterChainFactory
-  void createFilterChain(Http::FilterChainManager& manager) const override;
+  bool createFilterChain(Http::FilterChainManager& manager, bool) const override;
   bool createUpgradeFilterChain(absl::string_view, const Http::FilterChainFactory::UpgradeMap*,
                                 Http::FilterChainManager&) const override {
     return false;
@@ -198,32 +198,34 @@ public:
   originalIpDetectionExtensions() const override {
     return detection_extensions_;
   }
+  const std::vector<Http::EarlyHeaderMutationPtr>& earlyHeaderMutationExtensions() const override {
+    return early_header_mutations_;
+  }
   Http::Code request(absl::string_view path_and_query, absl::string_view method,
                      Http::ResponseHeaderMap& response_headers, std::string& body) override;
-  void closeSocket();
+  void closeSocket() override;
   void addListenerToHandler(Network::ConnectionHandler* handler) override;
 
   GenRequestFn createRequestFunction() const {
-    return [this](absl::string_view path_and_query, AdminStream& admin_stream) -> RequestPtr {
-      return makeRequest(path_and_query, admin_stream);
-    };
+    return [this](AdminStream& admin_stream) -> RequestPtr { return makeRequest(admin_stream); };
   }
   uint64_t maxRequestsPerConnection() const override { return 0; }
   const HttpConnectionManagerProto::ProxyStatusConfig* proxyStatusConfig() const override {
     return proxy_status_config_.get();
   }
-  Http::HeaderValidatorPtr makeHeaderValidator(Http::Protocol, StreamInfo::StreamInfo&) override {
+  Http::HeaderValidatorPtr makeHeaderValidator(Http::Protocol) override {
     // TODO(yanavlasov): admin interface should use the default validator
     return nullptr;
   }
+  bool appendXForwardedPort() const override { return false; }
 
 private:
   friend class AdminTestingPeer;
 
   /**
-   * Creates a Request from a url.
+   * Creates a Request from the request in the admin stream.
    */
-  RequestPtr makeRequest(absl::string_view path_and_query, AdminStream& admin_stream) const;
+  RequestPtr makeRequest(AdminStream& admin_stream) const;
 
   /**
    * Creates a UrlHandler structure from a non-chunked callback.
@@ -234,7 +236,7 @@ private:
 
   /**
    * Creates a URL prefix bound to chunked handler. Handler is expected to
-   * supply a method makeRequest(absl::string_view, AdminStream&).
+   * supply a method makeRequest(AdminStream&).
    *
    * @param prefix the prefix to register
    * @param help_text a help text ot display in a table in the admin home page
@@ -248,8 +250,8 @@ private:
   UrlHandler makeStreamingHandler(const std::string& prefix, const std::string& help_text,
                                   Handler& handler, bool removable, bool mutates_state) {
     return {prefix, help_text,
-            [&handler](absl::string_view path, AdminStream& admin_stream) -> Admin::RequestPtr {
-              return handler.makeRequest(path, admin_stream);
+            [&handler](AdminStream& admin_stream) -> Admin::RequestPtr {
+              return handler.makeRequest(admin_stream);
             },
             removable, mutates_state};
   }
@@ -341,12 +343,10 @@ private:
   /**
    * URL handlers.
    */
-  Http::Code handlerAdminHome(absl::string_view path_and_query,
-                              Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
+  Http::Code handlerAdminHome(Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
                               AdminStream&);
 
-  Http::Code handlerHelp(absl::string_view path_and_query,
-                         Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
+  Http::Code handlerHelp(Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
                          AdminStream&);
   void getHelp(Buffer::Instance& response) const;
 
@@ -498,6 +498,7 @@ private:
   const AdminInternalAddressConfig internal_address_config_;
   const LocalReply::LocalReplyPtr local_reply_;
   const std::vector<Http::OriginalIPDetectionSharedPtr> detection_extensions_{};
+  const std::vector<Http::EarlyHeaderMutationPtr> early_header_mutations_{};
   const absl::optional<std::string> scheme_{};
   const bool ignore_global_conn_limit_;
   std::unique_ptr<HttpConnectionManagerProto::ProxyStatusConfig> proxy_status_config_;

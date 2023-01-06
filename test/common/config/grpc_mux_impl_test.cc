@@ -2,6 +2,8 @@
 
 #include "envoy/config/endpoint/v3/endpoint.pb.h"
 #include "envoy/config/endpoint/v3/endpoint.pb.validate.h"
+#include "envoy/config/xds_config_tracker.h"
+#include "envoy/config/xds_resources_delegate.h"
 #include "envoy/service/discovery/v3/discovery.pb.h"
 
 #include "source/common/common/empty_string.h"
@@ -49,6 +51,7 @@ public:
   GrpcMuxImplTestBase()
       : async_client_(new Grpc::MockAsyncClient()),
         config_validators_(std::make_unique<NiceMock<MockCustomConfigValidators>>()),
+        resource_decoder_(std::make_shared<NiceMock<MockOpaqueResourceDecoder>>()),
         control_plane_connected_state_(
             stats_.gauge("control_plane.connected_state", Stats::Gauge::ImportMode::NeverImport)),
         control_plane_pending_requests_(
@@ -61,7 +64,9 @@ public:
         local_info_, std::unique_ptr<Grpc::MockAsyncClient>(async_client_), dispatcher_,
         *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
             "envoy.service.discovery.v3.AggregatedDiscoveryService.StreamAggregatedResources"),
-        random_, stats_, rate_limit_settings_, true, std::move(config_validators_));
+        random_, stats_, rate_limit_settings_, true, std::move(config_validators_),
+        /*xds_config_tracker=*/XdsConfigTrackerOptRef(),
+        /*xds_resources_delegate=*/XdsResourcesDelegateOptRef(), /*target_xds_authority=*/"");
   }
 
   void setup(const RateLimitSettings& custom_rate_limit_settings) {
@@ -69,7 +74,9 @@ public:
         local_info_, std::unique_ptr<Grpc::MockAsyncClient>(async_client_), dispatcher_,
         *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
             "envoy.service.discovery.v3.AggregatedDiscoveryService.StreamAggregatedResources"),
-        random_, stats_, custom_rate_limit_settings, true, std::move(config_validators_));
+        random_, stats_, custom_rate_limit_settings, true, std::move(config_validators_),
+        /*xds_config_tracker=*/XdsConfigTrackerOptRef(),
+        /*xds_resources_delegate=*/XdsResourcesDelegateOptRef(), /*target_xds_authority=*/"");
   }
 
   void expectSendMessage(const std::string& type_url,
@@ -105,7 +112,7 @@ public:
   CustomConfigValidatorsPtr config_validators_;
   GrpcMuxImplPtr grpc_mux_;
   NiceMock<MockSubscriptionCallbacks> callbacks_;
-  NiceMock<MockOpaqueResourceDecoder> resource_decoder_;
+  OpaqueResourceDecoderSharedPtr resource_decoder_;
   Stats::TestUtil::TestStore stats_;
   Envoy::Config::RateLimitSettings rate_limit_settings_;
   Stats::Gauge& control_plane_connected_state_;
@@ -338,8 +345,9 @@ TEST_F(GrpcMuxImplTest, ResourceTTL) {
 
   time_system_.setSystemTime(std::chrono::seconds(0));
 
-  TestUtility::TestOpaqueResourceDecoderImpl<envoy::config::endpoint::v3::ClusterLoadAssignment>
-      resource_decoder("cluster_name");
+  OpaqueResourceDecoderSharedPtr resource_decoder(
+      std::make_shared<TestUtility::TestOpaqueResourceDecoderImpl<
+          envoy::config::endpoint::v3::ClusterLoadAssignment>>("cluster_name"));
   const std::string& type_url = Config::TypeUrl::get().ClusterLoadAssignment;
   InSequence s;
   auto* ttl_timer = new Event::MockTimer(&dispatcher_);
@@ -497,8 +505,9 @@ TEST_F(GrpcMuxImplTest, WildcardWatch) {
 
   InSequence s;
   const std::string& type_url = Config::TypeUrl::get().ClusterLoadAssignment;
-  TestUtility::TestOpaqueResourceDecoderImpl<envoy::config::endpoint::v3::ClusterLoadAssignment>
-      resource_decoder("cluster_name");
+  OpaqueResourceDecoderSharedPtr resource_decoder(
+      std::make_shared<TestUtility::TestOpaqueResourceDecoderImpl<
+          envoy::config::endpoint::v3::ClusterLoadAssignment>>("cluster_name"));
   auto foo_sub = grpc_mux_->addWatch(type_url, {}, callbacks_, resource_decoder, {});
   EXPECT_CALL(*async_client_, startRaw(_, _, _, _)).WillOnce(Return(&async_stream_));
   expectSendMessage(type_url, {}, "", true);
@@ -529,8 +538,9 @@ TEST_F(GrpcMuxImplTest, WildcardWatch) {
 TEST_F(GrpcMuxImplTest, WatchDemux) {
   setup();
   InSequence s;
-  TestUtility::TestOpaqueResourceDecoderImpl<envoy::config::endpoint::v3::ClusterLoadAssignment>
-      resource_decoder("cluster_name");
+  OpaqueResourceDecoderSharedPtr resource_decoder(
+      std::make_shared<TestUtility::TestOpaqueResourceDecoderImpl<
+          envoy::config::endpoint::v3::ClusterLoadAssignment>>("cluster_name"));
   const std::string& type_url = Config::TypeUrl::get().ClusterLoadAssignment;
   NiceMock<MockSubscriptionCallbacks> foo_callbacks;
   auto foo_sub = grpc_mux_->addWatch(type_url, {"x", "y"}, foo_callbacks, resource_decoder, {});
@@ -885,7 +895,9 @@ TEST_F(GrpcMuxImplTest, BadLocalInfoEmptyClusterName) {
           *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
               "envoy.service.discovery.v3.AggregatedDiscoveryService.StreamAggregatedResources"),
           random_, stats_, rate_limit_settings_, true,
-          std::make_unique<NiceMock<MockCustomConfigValidators>>()),
+          std::make_unique<NiceMock<MockCustomConfigValidators>>(),
+          /*xds_config_tracker=*/XdsConfigTrackerOptRef(),
+          /*xds_resources_delegate=*/XdsResourcesDelegateOptRef(), /*target_xds_authority=*/""),
       EnvoyException,
       "ads: node 'id' and 'cluster' are required. Set it either in 'node' config or via "
       "--service-node and --service-cluster options.");
@@ -899,7 +911,9 @@ TEST_F(GrpcMuxImplTest, BadLocalInfoEmptyNodeName) {
           *Protobuf::DescriptorPool::generated_pool()->FindMethodByName(
               "envoy.service.discovery.v3.AggregatedDiscoveryService.StreamAggregatedResources"),
           random_, stats_, rate_limit_settings_, true,
-          std::make_unique<NiceMock<MockCustomConfigValidators>>()),
+          std::make_unique<NiceMock<MockCustomConfigValidators>>(),
+          /*xds_config_tracker=*/XdsConfigTrackerOptRef(),
+          /*xds_resources_delegate=*/XdsResourcesDelegateOptRef(), /*target_xds_authority=*/""),
       EnvoyException,
       "ads: node 'id' and 'cluster' are required. Set it either in 'node' config or via "
       "--service-node and --service-cluster options.");

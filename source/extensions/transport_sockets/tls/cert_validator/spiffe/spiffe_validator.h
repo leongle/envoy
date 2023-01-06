@@ -46,11 +46,10 @@ public:
       const Network::TransportSocketOptions* transport_socket_options) override;
   ValidationResults
   doVerifyCertChain(STACK_OF(X509)& cert_chain, Ssl::ValidateResultCallbackPtr callback,
-                    Ssl::SslExtendedSocketInfo* ssl_extended_info,
                     const Network::TransportSocketOptionsConstSharedPtr& transport_socket_options,
                     SSL_CTX& ssl_ctx,
-                    const CertValidator::ExtraValidationContext& validation_context,
-                    bool is_server) override;
+                    const CertValidator::ExtraValidationContext& validation_context, bool is_server,
+                    absl::string_view host_name) override;
 
   int initializeSslContexts(std::vector<SSL_CTX*> contexts, bool provides_certificates) override;
 
@@ -72,8 +71,7 @@ public:
   bool matchSubjectAltName(X509& leaf_cert);
 
 private:
-  bool verifyCertChainUsingTrustBundleStore(Ssl::SslExtendedSocketInfo* ssl_extended_info,
-                                            X509& leaf_cert, STACK_OF(X509)* cert_chain,
+  bool verifyCertChainUsingTrustBundleStore(X509& leaf_cert, STACK_OF(X509)* cert_chain,
                                             X509_VERIFY_PARAM* verify_param,
                                             std::string& error_details);
 

@@ -157,8 +157,7 @@ buildNameMatcher(const Http::Utility::QueryParams& params) {
 ConfigDumpHandler::ConfigDumpHandler(ConfigTracker& config_tracker, Server::Instance& server)
     : HandlerContextBase(server), config_tracker_(config_tracker) {}
 
-Http::Code ConfigDumpHandler::handlerConfigDump(absl::string_view,
-                                                Http::ResponseHeaderMap& response_headers,
+Http::Code ConfigDumpHandler::handlerConfigDump(Http::ResponseHeaderMap& response_headers,
                                                 Buffer::Instance& response,
                                                 AdminStream& admin_stream) const {
   Http::Utility::QueryParams query_params = admin_stream.queryParams();
@@ -363,7 +362,7 @@ void ConfigDumpHandler::addLbEndpoint(
   }
   lb_endpoint.mutable_load_balancing_weight()->set_value(host->weight());
 
-  switch (host->health()) {
+  switch (host->coarseHealth()) {
   case Upstream::Host::Health::Healthy:
     lb_endpoint.set_health_status(envoy::config::core::v3::HealthStatus::HEALTHY);
     break;

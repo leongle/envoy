@@ -41,8 +41,8 @@ public:
 
   Event::Dispatcher& dispatcher() override { return dispatcher_; }
 
-  void onCertValidationResult(bool succeeded, const std::string& error_details,
-                              uint8_t /*tls_alert*/) override {
+  void onCertValidationResult(bool succeeded, Ssl::ClientValidationStatus /*detailed_status*/,
+                              const std::string& error_details, uint8_t /*tls_alert*/) override {
     if (!succeeded) {
       std::unique_ptr<quic::ProofVerifyDetails> details = std::make_unique<CertVerifyResult>(false);
       quic_callback_->Run(succeeded, error_details, &details);
@@ -117,9 +117,10 @@ quic::QuicAsyncStatus EnvoyQuicProofVerifier::VerifyCertChain(
   // definition.
   ValidationResults result =
       static_cast<Extensions::TransportSockets::Tls::ClientContextImpl*>(context_.get())
-          ->customVerifyCertChainForQuic(
-              *cert_chain, std::move(envoy_callback), verify_context->isServer(),
-              verify_context->transportSocketOptions(), verify_context->extraValidationContext());
+          ->customVerifyCertChainForQuic(*cert_chain, std::move(envoy_callback),
+                                         verify_context->isServer(),
+                                         verify_context->transportSocketOptions(),
+                                         verify_context->extraValidationContext(), hostname);
   if (result.status == ValidationResults::ValidationStatus::Pending) {
     return quic::QUIC_PENDING;
   }

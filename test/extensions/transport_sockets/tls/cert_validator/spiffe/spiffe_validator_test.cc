@@ -241,13 +241,12 @@ TEST_P(TestSPIFFEValidator, TestDoVerifyCertChainWithEmptyChain) {
   TestSslExtendedSocketInfo info;
   SSLContextPtr ssl_ctx = SSL_CTX_new(TLS_method());
   bssl::UniquePtr<STACK_OF(X509)> cert_chain(sk_X509_new_null());
-  EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
-            validator()
-                .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                   /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
-                .status);
+  ValidationResults results =
+      validator().doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                    /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "");
+  EXPECT_EQ(ValidationResults::ValidationStatus::Failed, results.status);
+  EXPECT_EQ(Envoy::Ssl::ClientValidationStatus::NotValidated, results.detailed_status);
   EXPECT_EQ(1, stats().fail_verify_error_.value());
-  EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::NotValidated);
 }
 
 TEST_P(TestSPIFFEValidator, TestDoVerifyCertChainPrecheckFailure) {
@@ -260,17 +259,17 @@ TEST_P(TestSPIFFEValidator, TestDoVerifyCertChainPrecheckFailure) {
     SSLContextPtr ssl_ctx = SSL_CTX_new(TLS_method());
     bssl::UniquePtr<STACK_OF(X509)> cert_chain(sk_X509_new_null());
     sk_X509_push(cert_chain.get(), cert.release());
-    EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
-              validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
-                  .status);
+    ValidationResults results = validator().doVerifyCertChain(
+        *cert_chain, info.createValidateResultCallback(),
+        /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "");
+    EXPECT_EQ(ValidationResults::ValidationStatus::Failed, results.status);
+    EXPECT_EQ(Envoy::Ssl::ClientValidationStatus::Failed, results.detailed_status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
     EXPECT_FALSE(validator().doSynchronousVerifyCertChain(store_ctx.get(), &info, *cert, nullptr));
+    EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Failed);
   }
   EXPECT_EQ(1, stats().fail_verify_error_.value());
-  EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Failed);
 }
 
 TEST_P(TestSPIFFEValidator, TestDoVerifyCertChainSingleTrustDomain) {
@@ -295,8 +294,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -312,8 +311,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -330,8 +329,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -369,8 +368,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -385,8 +384,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -403,8 +402,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -421,8 +420,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -459,8 +458,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StoreContextPtr store_ctx = X509_STORE_CTX_new();
@@ -501,15 +500,15 @@ typed_config:
     setSanMatchers({matcher});
     initialize(config);
     if (Runtime::runtimeFeatureEnabled("envoy.reloadable_features.tls_async_cert_validation")) {
-      EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
-                validator()
-                    .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                       /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
-                    .status);
+      ValidationResults results = validator().doVerifyCertChain(
+          *cert_chain, info.createValidateResultCallback(),
+          /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "");
+      EXPECT_EQ(ValidationResults::ValidationStatus::Successful, results.status);
+      EXPECT_EQ(Envoy::Ssl::ClientValidationStatus::Validated, results.detailed_status);
     } else {
       EXPECT_TRUE(validator().doSynchronousVerifyCertChain(store_ctx.get(), &info, *cert, nullptr));
+      EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Validated);
     }
-    EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Validated);
   }
   {
     envoy::type::matcher::v3::StringMatcher matcher;
@@ -517,16 +516,16 @@ typed_config:
     setSanMatchers({matcher});
     initialize(config);
     if (Runtime::runtimeFeatureEnabled("envoy.reloadable_features.tls_async_cert_validation")) {
-      EXPECT_EQ(ValidationResults::ValidationStatus::Failed,
-                validator()
-                    .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                       /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
-                    .status);
+      ValidationResults results = validator().doVerifyCertChain(
+          *cert_chain, info.createValidateResultCallback(),
+          /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "");
+      EXPECT_EQ(ValidationResults::ValidationStatus::Failed, results.status);
+      EXPECT_EQ(Envoy::Ssl::ClientValidationStatus::Failed, results.detailed_status);
     } else {
       EXPECT_FALSE(
           validator().doSynchronousVerifyCertChain(store_ctx.get(), &info, *cert, nullptr));
+      EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Failed);
     }
-    EXPECT_EQ(info.certificateValidationStatus(), Envoy::Ssl::ClientValidationStatus::Failed);
     EXPECT_EQ(1, stats().fail_verify_san_.value());
     stats().fail_verify_san_.reset();
   }
@@ -559,8 +558,8 @@ typed_config:
     sk_X509_push(cert_chain.get(), intermediate_ca_cert.release());
     EXPECT_EQ(ValidationResults::ValidationStatus::Successful,
               validator()
-                  .doVerifyCertChain(*cert_chain, /*callback=*/nullptr, &info,
-                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false)
+                  .doVerifyCertChain(*cert_chain, info.createValidateResultCallback(),
+                                     /*transport_socket_options=*/nullptr, *ssl_ctx, {}, false, "")
                   .status);
   } else {
     X509StorePtr store = X509_STORE_new();
@@ -703,9 +702,9 @@ typed_config:
         filename: "{{ test_rundir }}/test/extensions/transport_sockets/tls/test_data/intermediate_ca_cert.pem"
   )EOF"),
              time_system);
-  EXPECT_EQ(19231, validator().daysUntilFirstCertExpires().value());
+  EXPECT_EQ(19956, validator().daysUntilFirstCertExpires().value());
   time_system.setSystemTime(std::chrono::milliseconds(864000000));
-  EXPECT_EQ(19221, validator().daysUntilFirstCertExpires().value());
+  EXPECT_EQ(19946, validator().daysUntilFirstCertExpires().value());
 }
 
 TEST_P(TestSPIFFEValidator, TestDaysUntilFirstCertExpiresExpired) {

@@ -82,13 +82,15 @@ public:
    */
   CodeResponse handlerStats(absl::string_view url) {
     MockInstance instance;
+    EXPECT_CALL(admin_stream_, getRequestHeaders()).WillRepeatedly(ReturnRef(request_headers_));
     EXPECT_CALL(instance, statsConfig()).WillRepeatedly(ReturnRef(stats_config_));
     EXPECT_CALL(stats_config_, flushOnAdmin()).WillRepeatedly(Return(false));
     EXPECT_CALL(instance, stats()).WillRepeatedly(ReturnRef(*store_));
     EXPECT_CALL(instance, api()).WillRepeatedly(ReturnRef(api_));
     EXPECT_CALL(api_, customStatNamespaces()).WillRepeatedly(ReturnRef(custom_namespaces_));
     StatsHandler handler(instance);
-    Admin::RequestPtr request = handler.makeRequest(url, admin_stream_);
+    request_headers_.setPath(url);
+    Admin::RequestPtr request = handler.makeRequest(admin_stream_);
     Http::TestResponseHeaderMapImpl response_headers;
     Http::Code code = request->start(response_headers);
     Buffer::OwnedImpl data;
@@ -131,6 +133,7 @@ public:
   Stats::MockSink sink_;
   Stats::ThreadLocalStoreImplPtr store_;
   Stats::CustomStatNamespacesImpl custom_namespaces_;
+  Http::TestRequestHeaderMapImpl request_headers_;
   MockAdminStream admin_stream_;
   Configuration::MockStatsConfig stats_config_;
   TestScopedRuntime scoped_runtime_;
@@ -188,9 +191,9 @@ TEST_F(AdminStatsTest, HandlerStatsHtml) {
   InSequence s;
   store_->initializeThreading(main_thread_dispatcher_, tls_);
 
-  store_->counterFromStatName(makeStat("foo.c0")).add(0);
+  store_->rootScope()->counterFromStatName(makeStat("foo.c0")).add(0);
   Stats::ScopeSharedPtr scope0 = store_->createScope("");
-  store_->counterFromStatName(makeStat("foo.c1")).add(1);
+  store_->rootScope()->counterFromStatName(makeStat("foo.c1")).add(1);
   Stats::ScopeSharedPtr scope = store_->createScope("scope");
   scope->gaugeFromStatName(makeStat("g2"), Stats::Gauge::ImportMode::Accumulate).set(2);
   Stats::ScopeSharedPtr scope2 = store_->createScope("scope1.scope2");
@@ -1168,7 +1171,7 @@ protected:
   void addStats() {
     ASSERT_EQ(NumScopes, scopes_.size());
     for (uint32_t s = 0; s < NumScopes; ++s) {
-      Stats::ScopeSharedPtr scope = store_->scopeFromStatName(scope_names_[s]);
+      Stats::ScopeSharedPtr scope = store_->rootScope()->scopeFromStatName(scope_names_[s]);
       {
         absl::MutexLock lock(&scope_mutexes_[s]);
         scopes_[s] = scope;
@@ -1292,22 +1295,22 @@ public:
     Stats::StatNameTagVector c1Tags{{makeStat("cluster"), makeStat("c1")}};
     Stats::StatNameTagVector c2Tags{{makeStat("cluster"), makeStat("c2")}};
 
-    Stats::Counter& c1 =
-        store_->counterFromStatNameWithTags(makeStat("cluster.upstream.cx.total"), c1Tags);
+    Stats::Counter& c1 = store_->rootScope()->counterFromStatNameWithTags(
+        makeStat("cluster.upstream.cx.total"), c1Tags);
     c1.add(10);
-    Stats::Counter& c2 =
-        store_->counterFromStatNameWithTags(makeStat("cluster.upstream.cx.total"), c2Tags);
+    Stats::Counter& c2 = store_->rootScope()->counterFromStatNameWithTags(
+        makeStat("cluster.upstream.cx.total"), c2Tags);
     c2.add(20);
 
-    Stats::Gauge& g1 = store_->gaugeFromStatNameWithTags(
+    Stats::Gauge& g1 = store_->rootScope()->gaugeFromStatNameWithTags(
         makeStat("cluster.upstream.cx.active"), c1Tags, Stats::Gauge::ImportMode::Accumulate);
     g1.set(11);
-    Stats::Gauge& g2 = store_->gaugeFromStatNameWithTags(
+    Stats::Gauge& g2 = store_->rootScope()->gaugeFromStatNameWithTags(
         makeStat("cluster.upstream.cx.active"), c2Tags, Stats::Gauge::ImportMode::Accumulate);
     g2.set(12);
 
-    Stats::TextReadout& t1 =
-        store_->textReadoutFromStatNameWithTags(makeStat("control_plane.identifier"), c1Tags);
+    Stats::TextReadout& t1 = store_->rootScope()->textReadoutFromStatNameWithTags(
+        makeStat("control_plane.identifier"), c1Tags);
     t1.set("cp-1");
   }
 };

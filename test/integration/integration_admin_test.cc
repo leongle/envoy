@@ -487,7 +487,7 @@ TEST_P(IntegrationAdminTest, AdminOnDestroyCallbacks) {
   bool test = true;
 
   // add an handler which adds a callback to the list of callback called when connection is dropped.
-  auto callback = [&test](absl::string_view, Http::HeaderMap&, Buffer::Instance&,
+  auto callback = [&test](Http::HeaderMap&, Buffer::Instance&,
                           Server::AdminStream& admin_stream) -> Http::Code {
     auto on_destroy_callback = [&test]() { test = false; };
 
@@ -497,7 +497,7 @@ TEST_P(IntegrationAdminTest, AdminOnDestroyCallbacks) {
   };
 
   EXPECT_TRUE(
-      test_server_->server().admin().addHandler("/foo/bar", "hello", callback, true, false));
+      test_server_->server().admin()->addHandler("/foo/bar", "hello", callback, true, false));
 
   // As part of the request, on destroy() should be called and the on_destroy_callback invoked.
   BufferingStreamDecoderPtr response;

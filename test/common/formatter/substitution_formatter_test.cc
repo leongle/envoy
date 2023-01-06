@@ -15,6 +15,7 @@
 #include "source/common/network/address_impl.h"
 #include "source/common/protobuf/utility.h"
 #include "source/common/router/string_accessor_impl.h"
+#include "source/common/stream_info/stream_id_provider_impl.h"
 
 #include "test/common/formatter/command_extension.h"
 #include "test/mocks/api/mocks.h"
@@ -298,6 +299,31 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
     EXPECT_THAT(ttlb_duration_format.formatValue(request_headers, response_headers,
                                                  response_trailers, stream_info, body),
                 ProtoEq(ValueUtil::numberValue(15.0)));
+  }
+
+  {
+    StreamInfoFormatter handshake_duration_format("DOWNSTREAM_HANDSHAKE_DURATION");
+
+    EXPECT_EQ(absl::nullopt,
+              handshake_duration_format.format(request_headers, response_headers, response_trailers,
+                                               stream_info, body));
+    EXPECT_THAT(handshake_duration_format.formatValue(request_headers, response_headers,
+                                                      response_trailers, stream_info, body),
+                ProtoEq(ValueUtil::nullValue()));
+  }
+
+  {
+    StreamInfoFormatter handshake_duration_format("DOWNSTREAM_HANDSHAKE_DURATION");
+
+    EXPECT_CALL(time_system, monotonicTime)
+        .WillOnce(Return(MonotonicTime(std::chrono::nanoseconds(25000000))));
+    stream_info.downstream_timing_.onDownstreamHandshakeComplete(time_system);
+
+    EXPECT_EQ("25", handshake_duration_format.format(request_headers, response_headers,
+                                                     response_trailers, stream_info, body));
+    EXPECT_THAT(handshake_duration_format.formatValue(request_headers, response_headers,
+                                                      response_trailers, stream_info, body),
+                ProtoEq(ValueUtil::numberValue(25.0)));
   }
 
   {
@@ -797,6 +823,21 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
     EXPECT_THAT(upstream_format.formatValue(request_headers, response_headers, response_trailers,
                                             stream_info, body),
                 ProtoEq(ValueUtil::numberValue(id)));
+  }
+
+  {
+    StreamInfoFormatter upstream_format("STREAM_ID");
+
+    StreamInfo::StreamIdProviderImpl id_provider("ffffffff-0012-0110-00ff-0c00400600ff");
+    EXPECT_CALL(stream_info, getStreamIdProvider())
+        .WillRepeatedly(Return(makeOptRef<const StreamInfo::StreamIdProvider>(id_provider)));
+
+    EXPECT_EQ("ffffffff-0012-0110-00ff-0c00400600ff",
+              upstream_format.format(request_headers, response_headers, response_trailers,
+                                     stream_info, body));
+    EXPECT_THAT(upstream_format.formatValue(request_headers, response_headers, response_trailers,
+                                            stream_info, body),
+                ProtoEq(ValueUtil::stringValue("ffffffff-0012-0110-00ff-0c00400600ff")));
   }
 
   {

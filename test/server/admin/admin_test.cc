@@ -100,8 +100,9 @@ TEST_P(AdminInstanceTest, AdminBadAddressOutPath) {
 }
 
 TEST_P(AdminInstanceTest, CustomHandler) {
-  auto callback = [](absl::string_view, Http::HeaderMap&, Buffer::Instance&,
-                     AdminStream&) -> Http::Code { return Http::Code::Accepted; };
+  auto callback = [](Http::HeaderMap&, Buffer::Instance&, AdminStream&) -> Http::Code {
+    return Http::Code::Accepted;
+  };
 
   // Test removable handler.
   EXPECT_NO_LOGS(EXPECT_TRUE(admin_.addHandler("/foo/bar", "hello", callback, true, false)));
@@ -169,14 +170,14 @@ TEST_P(AdminInstanceTest, Help) {
   /server_info: print server version/status information
   /stats: print server stats
       usedonly: Only include stats that have been written by system since restart
-      filter: Regular expression (ecmascript) for filtering stats
+      filter: Regular expression (Google re2) for filtering stats
       format: Format to use; One of (html, text, json)
       type: Stat types to include.; One of (All, Counters, Histograms, Gauges, TextReadouts)
       histogram_buckets: Histogram bucket display mode; One of (cumulative, disjoint, none)
   /stats/prometheus: print server stats in prometheus format
       usedonly: Only include stats that have been written by system since restart
       text_readouts: Render text_readouts as new gaugues with value 0 (increases Prometheus data size)
-      filter: Regular expression (ecmascript) for filtering stats
+      filter: Regular expression (Google re2) for filtering stats
   /stats/recentlookups: Show recent stat-name lookups
   /stats/recentlookups/clear (POST): clear list of stat-name lookups and counter
   /stats/recentlookups/disable (POST): disable recording of reset stat-name lookup names
@@ -199,7 +200,7 @@ private:
 };
 
 TEST_P(AdminInstanceTest, CustomChunkedHandler) {
-  auto callback = [](absl::string_view, AdminStream&) -> Admin::RequestPtr {
+  auto callback = [](AdminStream&) -> Admin::RequestPtr {
     Admin::RequestPtr handler = Admin::RequestPtr(new ChunkedHandler);
     return handler;
   };
@@ -267,8 +268,9 @@ TEST_P(AdminInstanceTest, StatsWithMultipleChunks) {
 }
 
 TEST_P(AdminInstanceTest, RejectHandlerWithXss) {
-  auto callback = [](absl::string_view, Http::HeaderMap&, Buffer::Instance&,
-                     AdminStream&) -> Http::Code { return Http::Code::Accepted; };
+  auto callback = [](Http::HeaderMap&, Buffer::Instance&, AdminStream&) -> Http::Code {
+    return Http::Code::Accepted;
+  };
   EXPECT_LOG_CONTAINS("error",
                       "filter \"/foo<script>alert('hi')</script>\" contains invalid character '<'",
                       EXPECT_FALSE(admin_.addHandler("/foo<script>alert('hi')</script>", "hello",
@@ -276,8 +278,9 @@ TEST_P(AdminInstanceTest, RejectHandlerWithXss) {
 }
 
 TEST_P(AdminInstanceTest, RejectHandlerWithEmbeddedQuery) {
-  auto callback = [](absl::string_view, Http::HeaderMap&, Buffer::Instance&,
-                     AdminStream&) -> Http::Code { return Http::Code::Accepted; };
+  auto callback = [](Http::HeaderMap&, Buffer::Instance&, AdminStream&) -> Http::Code {
+    return Http::Code::Accepted;
+  };
   EXPECT_LOG_CONTAINS("error",
                       "filter \"/bar?queryShouldNotBeInPrefix\" contains invalid character '?'",
                       EXPECT_FALSE(admin_.addHandler("/bar?queryShouldNotBeInPrefix", "hello",
